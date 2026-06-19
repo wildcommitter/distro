@@ -113,7 +113,31 @@ RUN set -eux; \
     systemctl enable zfs-zed.service 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
-# 6) bootc requires a clean container at the end
+# 6) Full-disk encryption unlock: FIDO2 (local, physical key) + SSH (remote,
+#    passphrase) into the initramfs for the LUKS-encrypted btrfs root.
+#    The LUKS volume itself is created at install time (kickstart, see
+#    iso/luks-btrfs.ks.tmpl) — this image only needs to be ABLE to unlock it.
+#    - fido2 dracut module ships in base Fedora dracut + libfido2, just needs
+#      enabling via dracut.conf.d.
+#    - crypt-ssh (dracut-crypt-ssh) is not in Fedora's repos; COPR only.
+# -----------------------------------------------------------------------------
+RUN dnf -y copr enable uriesk/dracut-crypt-ssh; \
+    dnf -y install dracut-crypt-ssh; \
+    dnf -y copr disable uriesk/dracut-crypt-ssh
+
+RUN set -eux; \
+    chmod 700 /root/.ssh; \
+    chmod 600 /root/.ssh/authorized_keys; \
+    KVER="$(rpm -q --qf '%{version}-%{release}.%{arch}' kernel)"; \
+    INITRD="/usr/lib/modules/$KVER/initramfs.img"; \
+    dracut -f "$INITRD" "$KVER"; \
+    LISTING="$(lsinitrd "$INITRD")"; \
+    echo "$LISTING" | grep -q 'usr/bin/dropbear' || { echo "dropbear missing from initramfs (crypt-ssh module not included)" >&2; exit 1; }; \
+    echo "$LISTING" | grep -q 'root/.ssh/authorized_keys' || { echo "authorized_keys missing from initramfs" >&2; exit 1; }; \
+    echo "$LISTING" | grep -q 'libfido2.so' || { echo "libfido2 missing from initramfs (fido2 module not included)" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# 7) bootc requires a clean container at the end
 # -----------------------------------------------------------------------------
 RUN dnf clean all && rm -rf /var/cache /var/log/dnf* /tmp/*
 

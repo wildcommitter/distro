@@ -7,3 +7,4 @@ Keep entries here short — one line per file, pointing at the real content.
 - [project-overview.md](project-overview.md) — what this distro is and how the pieces fit together
 - [akmods-kernel-skew.md](akmods-kernel-skew.md) — why the ZFS kmod can silently fail to match the booted kernel
 - [build-pipeline-gotchas.md](build-pipeline-gotchas.md) — concrete fixes for past CI/build breakage (dnf5 quirks, RPM layout, package names)
+- [full-disk-encryption.md](full-disk-encryption.md) — LUKS2 btrfs root design: why kickstart not bootc's tpm2-luks, FIDO2 vs SSH-passphrase unlock split, dracut module gotchas

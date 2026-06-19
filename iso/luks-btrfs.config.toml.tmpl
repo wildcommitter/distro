@@ -1,0 +1,30 @@
+# bootc-image-builder config for an installable ISO with a LUKS2-encrypted
+# btrfs root. Templated — @@PASSPHRASE@@ is substituted by `just
+# iso-encrypted` at build time from an env var. NEVER commit this file with
+# a real passphrase filled in; the materialized copy goes under ./output,
+# which is gitignored.
+#
+# bootc-image-builder auto-appends the `ostreecontainer` command for the
+# image being built — do not add it to the kickstart contents below.
+# [customizations.user] and [customizations.installer.kickstart] are
+# mutually exclusive, so any user-account setup is left to Anaconda's normal
+# interactive prompt rather than scripted here.
+
+[customizations.installer.kickstart]
+contents = """
+lang en_US.UTF-8
+keyboard us
+timezone UTC --utc
+
+network --bootproto=dhcp --activate
+
+zerombr
+clearpart --all --initlabel --disklabel=gpt
+part biosboot --size=1 --fstype=biosboot
+part /boot --size=1024 --fstype=ext4 --label=boot
+part /boot/efi --size=600 --fstype=efi --label=EFI
+part btrfs.01 --fstype="btrfs" --grow --size=8192 --encrypted --passphrase="@@PASSPHRASE@@"
+btrfs / --label=root --data=single btrfs.01
+
+reboot
+"""

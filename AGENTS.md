@@ -35,6 +35,12 @@ image as a config tree (systemd units, niri config, session files).
   bump (e.g. it may still describe an old default). Treat the Containerfile
   as ground truth over the README when they disagree, and flag the drift
   to the user rather than silently trusting either one.
+- `iso/luks-btrfs.config.toml.tmpl` — bootc-image-builder kickstart template
+  for the LUKS2-encrypted btrfs root. `just iso-encrypted PASSPHRASE=...`
+  materializes it under `./output` (gitignored) — never fill in
+  `@@PASSPHRASE@@` in the committed template. See
+  `.agent/memory/full-disk-encryption.md` for why this path was chosen over
+  bootc's native `--block-setup tpm2-luks`.
 
 ## Local memory
 

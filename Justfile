@@ -57,6 +57,29 @@ install-to-disk DISK:
     @echo "This WIPES {{DISK}}. Ctrl-C within 5s to abort."; sleep 5
     sudo bootc install to-disk --wipe {{DISK}}
 
+# Build an installable ISO with a LUKS2-encrypted btrfs root (kickstart-driven —
+# bootc's own --block-setup tpm2-luks is TPM2-only and unreliable upstream).
+# Usage: just iso-encrypted PASSPHRASE='your luks passphrase'
+# Enroll a FIDO2 key as a *convenience* unlock afterwards with `enroll-fido2`;
+# the passphrase set here remains the fallback, and is what you type over the
+# initramfs SSH session (dracut-crypt-ssh, port 222) for remote unlock —
+# FIDO2 cannot be used remotely, only when physically plugged in.
+iso-encrypted PASSPHRASE: build
+    mkdir -p {{OUTPUT}}
+    sed 's/@@PASSPHRASE@@/{{PASSPHRASE}}/' iso/luks-btrfs.config.toml.tmpl > {{OUTPUT}}/luks-btrfs.config.toml
+    sudo podman run --rm -it --privileged \
+        --security-opt label=type:unconfined_t \
+        -v {{OUTPUT}}/luks-btrfs.config.toml:/config.toml:ro \
+        -v {{OUTPUT}}:/output \
+        -v /var/lib/containers/storage:/var/lib/containers/storage \
+        {{BIB}} --type iso --config /config.toml --local {{IMAGE}}
+    rm -f {{OUTPUT}}/luks-btrfs.config.toml
+
+# One-time FIDO2 enrollment into the encrypted root (run post-install, key plugged in).
+# Usage: just enroll-fido2 [DEVICE]  (auto-detects the root LUKS device if omitted)
+enroll-fido2 DEVICE="":
+    sudo /usr/libexec/luks-enroll-fido2.sh {{DEVICE}}
+
 # One-time creation of the two ZFS data pools (run once, post-install).
 # Usage: just zfs-create DISK0=/dev/disk/by-id/... DISK1=/dev/disk/by-id/...
 zfs-create DISK0 DISK1:
