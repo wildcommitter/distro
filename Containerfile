@@ -12,14 +12,17 @@
 # ---- Single source of truth for the Fedora release ----
 # Bump this ONE value to move releases; akmods tag and base image follow it.
 # The uBlue akmods-zfs cache is published as <kernel_flavor>-<release>, e.g.
-# main-42. We track the newest published build for that release; there is no
-# separate ZFS "version" to pin — the OpenZFS version is whatever uBlue ships
-# for this kernel. Keep akmods and base on the SAME release or the kmod won't
-# match the kernel and ZFS won't load.
-ARG FEDORA_MAJOR=42
-ARG AKMODS_KERNEL=main
-# Resolved tag: e.g. main-42. Override AKMODS_TAG directly to pin a specific
-# daily build if you ever need reproducibility.
+# coreos-stable-42. We track the newest published build for that release;
+# there is no separate ZFS "version" to pin — the OpenZFS version is whatever
+# uBlue ships for this kernel. Keep akmods and base on the SAME release or
+# the kmod won't match the kernel and ZFS won't load.
+ARG FEDORA_MAJOR=43
+ARG AKMODS_KERNEL=coreos-stable
+# Resolved tag: e.g. coreos-stable-43. Override AKMODS_TAG directly to pin a
+# specific daily build if you ever need reproducibility.
+# NOTE: coreos-testing's akmods cache stalled (no rebuild since 2026-05-23)
+# while coreos-stable rebuilds daily and tracks the base image far more
+# closely — stable is the better bet for an actually-loading ZFS module.
 ARG AKMODS_TAG=${AKMODS_KERNEL}-${FEDORA_MAJOR}
 
 # Prebuilt, signed ZFS akmod RPMs (kernel-matched). This is the reliable path,
@@ -29,7 +32,7 @@ FROM ghcr.io/ublue-os/akmods-zfs:${AKMODS_TAG} AS akmods
 # ---- Base image: official Fedora bootc, matched to the same release ----
 FROM quay.io/fedora/fedora-bootc:${FEDORA_MAJOR}
 
-ARG FEDORA_MAJOR=42
+ARG FEDORA_MAJOR=43
 
 # -----------------------------------------------------------------------------
 # 1) Bring in the prebuilt ZFS kmod + userland + uBlue signing/repo addons
@@ -37,21 +40,22 @@ ARG FEDORA_MAJOR=42
 COPY --from=akmods /rpms /tmp/akmods-rpms
 RUN set -euxo pipefail; \
     find /tmp/akmods-rpms -type f -name '*.rpm' | sort; \
-    # addons first: installs the uBlue kmod signing key + repo definitions \
-    dnf -y install /tmp/akmods-rpms/ublue-os/ublue-os-akmods-addons*.rpm || true; \
-    # the actual zfs kmod + zfs/libzfs userland \
-    dnf -y install \
-        /tmp/akmods-rpms/kmods/kmod-zfs-*.rpm \
-        /tmp/akmods-rpms/zfs/zfs-*.rpm \
-        2>/dev/null \
-      || dnf -y install /tmp/akmods-rpms/**/zfs*.rpm /tmp/akmods-rpms/**/kmod-zfs*.rpm; \
+    # addons: signing key + repo definitions, when this flavor publishes one \
+    dnf -y install /tmp/akmods-rpms/ublue-os/ublue-os-akmods-addons*.rpm 2>/dev/null || true; \
+    # zfs kmod + zfs/libzfs userland all live under kmods/zfs/ \
+    dnf -y install /tmp/akmods-rpms/kmods/zfs/*.rpm; \
     rm -rf /tmp/akmods-rpms
 
-# Make sure the module is found and loaded at boot
+# Make sure the module is found and loaded at boot.
+# Target the kernel the base image actually booted, not "whatever directory
+# exists" — if the akmods cache is briefly out of sync with the base image
+# (the weekly rebuild above is what re-syncs them), the zfs kmod can land
+# under a kernel version that was never installed. depmod must still only
+# run against the real installed kernel, or it errors out on the stub dir.
 RUN set -eux; \
     echo zfs > /usr/lib/modules-load.d/zfs.conf; \
-    # regenerate depmod for the baked kernel \
-    KVER="$(ls /usr/lib/modules)"; depmod -a "$KVER"
+    KVER="$(rpm -q --qf '%{version}-%{release}.%{arch}' kernel)"; \
+    depmod -a "$KVER"
 
 # -----------------------------------------------------------------------------
 # 2) Virtualization stack: KVM + libvirtd + virt-manager + virt-install
@@ -67,7 +71,8 @@ RUN dnf -y install \
 # -----------------------------------------------------------------------------
 # 3) Wayland session: niri compositor + supporting bits + SDDM login
 # -----------------------------------------------------------------------------
-RUN dnf -y copr enable yalter/niri || true; \
+RUN dnf -y install dnf5-plugins; \
+    dnf -y copr enable yalter/niri || true; \
     dnf -y install \
         niri xwayland-satellite \
         sddm \
@@ -82,15 +87,12 @@ RUN dnf -y copr enable yalter/niri || true; \
 # 4) noctalia-shell (Quickshell-based). Not in Fedora repos -> install Quickshell
 #    from COPR and clone noctalia into the system config tree.
 # -----------------------------------------------------------------------------
-RUN dnf -y copr enable errornointernet/quickshell || true; \
+RUN dnf -y copr enable errornointernet/quickshell; \
     dnf -y install quickshell git \
         qt6-qtbase qt6-qtdeclarative qt6-qtsvg qt6-qt5compat \
         qt6-qtmultimedia qt6-qtwayland \
         google-noto-sans-fonts google-noto-color-emoji-fonts \
-        ttf-jetbrains-mono-fonts || \
-    dnf -y install quickshell git qt6-qtbase qt6-qtdeclarative qt6-qtsvg \
-        qt6-qt5compat qt6-qtmultimedia qt6-qtwayland \
-        google-noto-sans-fonts google-noto-color-emoji-fonts
+        jetbrains-mono-fonts
 
 # Pull noctalia-shell into /usr/share so it's part of the image, not /home
 RUN set -eux; \
