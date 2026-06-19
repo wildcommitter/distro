@@ -9,18 +9,25 @@
 # which cannot ship this desktop. This image is the desktop-capable route.
 # =============================================================================
 
-# ---- Pin these three to the SAME Fedora release ----
+# ---- Single source of truth for the Fedora release ----
+# Bump this ONE value to move releases; akmods tag and base image follow it.
+# The uBlue akmods-zfs cache is published as <kernel_flavor>-<release>, e.g.
+# main-42. We track the newest published build for that release; there is no
+# separate ZFS "version" to pin — the OpenZFS version is whatever uBlue ships
+# for this kernel. Keep akmods and base on the SAME release or the kmod won't
+# match the kernel and ZFS won't load.
 ARG FEDORA_MAJOR=42
-# uBlue akmods cache tag: <stream>-<fedora_major>  (e.g. main-42). The zfs
-# kmod + zfs userland are published here, prebuilt + signed, for the matching
-# kernel. Building akmods from source as root is broken on F44+, so we copy.
-ARG AKMODS_TAG=main-42
+ARG AKMODS_KERNEL=main
+# Resolved tag: e.g. main-42. Override AKMODS_TAG directly to pin a specific
+# daily build if you ever need reproducibility.
+ARG AKMODS_TAG=${AKMODS_KERNEL}-${FEDORA_MAJOR}
 
-# Prebuilt, signed ZFS akmod RPMs (kernel-matched). This is the reliable path.
+# Prebuilt, signed ZFS akmod RPMs (kernel-matched). This is the reliable path,
+# and it now tracks the latest uBlue daily build for the chosen release.
 FROM ghcr.io/ublue-os/akmods-zfs:${AKMODS_TAG} AS akmods
 
-# ---- Base image: official Fedora bootc ----
-FROM quay.io/fedora/fedora-bootc:42
+# ---- Base image: official Fedora bootc, matched to the same release ----
+FROM quay.io/fedora/fedora-bootc:${FEDORA_MAJOR}
 
 ARG FEDORA_MAJOR=42
 

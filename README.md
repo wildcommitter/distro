@@ -30,8 +30,12 @@ image; you'd run plain FCOS and drop the desktop.
 - ZFS is **not in the Fedora kernel** and source akmod builds are broken as
   root on F44+. We therefore **copy prebuilt, signed ZFS akmod RPMs** from the
   Universal Blue `akmods-zfs` cache (`ghcr.io/ublue-os/akmods-zfs:main-42`),
-  matched to the baked kernel. Keep `FEDORA_MAJOR`, the base image tag, and
-  `AKMODS_TAG` on the **same Fedora release**, or the kmod won't match the
+  matched to the baked kernel. There is no separate ZFS "release number" to
+  pin — the OpenZFS version is whatever uBlue ships for that kernel, and the
+  images are rebuilt daily. **Bump the single `FEDORA_MAJOR` build arg** to move
+  releases; the akmods tag (`<AKMODS_KERNEL>-<FEDORA_MAJOR>`, default
+  `main-42`) and the `fedora-bootc` base both follow it, so they can't drift
+  out of sync. Keep them on the same release or the kmod won't match the
   kernel and ZFS won't load.
 - `zfs-import-pools.service` only ever **imports** pools by name. It never
   creates them, so a boot can't wipe a disk.
