@@ -1,0 +1,31 @@
+[Unit]
+Description=Import the two ZFS data pools by name (idempotent, import-only)
+Documentation=man:zpool(8)
+DefaultDependencies=no
+Requires=systemd-udev-settle.service
+After=systemd-udev-settle.service zfs-load-module.service
+Before=zfs-mount.service zfs.target local-fs.target
+ConditionPathExists=/sys/module/zfs
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Import by cachefile if present, else scan by-id. We import by POOL NAME only;
+# we NEVER create pools here, so this can't wipe a disk on boot.
+# Edit POOL1 / POOL2 to your actual pool names.
+Environment=POOL1=tank0
+Environment=POOL2=tank1
+ExecStart=/usr/bin/bash -c '\
+  for p in "$POOL1" "$POOL2"; do \
+    if zpool list -H -o name "$p" >/dev/null 2>&1; then \
+      echo "pool $p already imported"; \
+    else \
+      zpool import -d /dev/disk/by-id -N "$p" || \
+      echo "WARN: pool $p not found to import (create it manually once)"; \
+    fi; \
+  done'
+# Mount datasets after import
+ExecStartPost=/usr/bin/bash -c 'zfs mount -a || true'
+
+[Install]
+WantedBy=zfs.target

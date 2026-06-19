@@ -1,0 +1,15 @@
+// Minimal niri config: launch noctalia-shell as the bar/shell, xwayland bridge.
+spawn-at-startup "xwayland-satellite"
+spawn-at-startup "qs" "-c" "/usr/share/noctalia-shell"
+
+input {
+    keyboard { xkb { layout "es"; }; }
+    touchpad { tap; natural-scroll; }
+}
+
+binds {
+    Mod+Return { spawn "kitty"; }
+    Mod+Q      { close-window; }
+    Mod+D      { spawn "qs" "-c" "/usr/share/noctalia-shell" "ipc" "call" "launcher" "toggle"; }
+    Mod+Shift+E { quit; }
+}

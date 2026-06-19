@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=niri (noctalia)
+Comment=Scrollable-tiling Wayland compositor with noctalia shell
+Exec=niri-session
+Type=Application
+DesktopNames=niri
